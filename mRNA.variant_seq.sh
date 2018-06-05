@@ -6,7 +6,8 @@ module load STAR/2.5.3a
 module load picard/2.11
 module load gatk/3.8
 module load samtools/1.8
-
+module load java/8u121
+ 
 # read arguments
 genome="Mmul_8"
 pairEnd=false
@@ -54,7 +55,7 @@ then
 	if [ $? != 0 ]
         then
             echo -ne "error\n  unable to aligned read in directory $sample"
-            exit
+            exit 1
         fi
 	# remove file
 	rm ${sample}_1.fq.gz
@@ -119,6 +120,11 @@ then
 	    M=$sampleID.dup.metrics \
 	    CREATE_INDEX=true \
 	    VALIDATION_STRINGENCY=SILENT 2>$sampleID.markDuplicates.log
+        if [ $? != 0 ]
+        then
+            echo -ne "error\n  unable to mark duplicates"
+            exit 1
+        fi
 	# remove files
 	rm $sample
 	rm $sample.bai
@@ -182,7 +188,7 @@ then
     for sample in $(find $dirData -name "*.split.bam")
     do
         sampleID=$(echo $sample | sed -r 's/(.?).split.bam$/\1/')
-        java -d64 -Xmx30G -jar $GATK \
+        java -d64 -Xmx32G -jar $GATK \
             -T IndelRealigner \
             -R $genomeFasta \
             -targetIntervals $sampleID.intervals \
@@ -190,6 +196,11 @@ then
             -o $sampleID.processed.bam 2>$sampleID.indel2.log
             # -known $seqDependencies/Annotation/Mills_and_1000G_gold_standard.indels.hg38.vcf
             # -known $seqDependencies/Annotation/Homo_sapiens_assembly38.known_indels.vcf
+	if [ $? != 0 ]
+	then
+	    echo -ne "error\n  unable to perform indel realignment"
+	    exit 1
+        fi
 	# remove files
 	rm $sample
 	rm $sampleID.split.bai
@@ -226,13 +237,18 @@ then
     for sample in $(find $dirData -name "*.processed.bam")
     do
 	sampleID=$(echo $sample | sed -r 's/(.?).processed.bam$/\1/')
-	java -d64 -Xmx30G -jar $GATK \
+	java -d64 -Xmx32G -jar $GATK \
 	    -T PrintReads \
 	    -R $genomeFasta \
 	    -I $sample \
 	    -nct $maxProc \
 	    -BQSR $sampleID.recal.table \
 	    -o $sampleID.recal.bam 2>$sampleID.baseRecalib.log
+	if [ $? != 0 ]
+        then
+            echo -ne "error\n  unable to print recalibrated reads"
+            exit 1
+        fi
 	# remove files
 	rm $sample
 	rm $sampleID.processed.bai
@@ -249,7 +265,7 @@ then
     for sample in $(find $dirData -name "*.recal.bam")
     do
 	sampleID=$(echo $sample | sed -r 's/(.?).recal.bam$/\1/')
-	java -d64 -Xmx30G \
+	java -d64 -Xmx32G \
 	    -jar $GATK \
 	    -T HaplotypeCaller \
 	    -R $genomeFasta \
@@ -261,11 +277,16 @@ then
 	    -variant_index_parameter 128000 \
 	    -nct $maxProc \
 	    -o $sampleID.vcf 2>$sampleID.haploCaller.log
+	if [ $? != 0 ]
+        then
+            echo -ne "error\n  unable to call variants"
+            exit 1
+        fi
 	# -stand_emit_conf 20 is obsolete
 	# remove files
-	# rm $sample
-	# rm $sampleID.recal.bai
-	# rm $sampleID.recal.table
+	rm $sample
+	rm $sampleID.recal.bai
+	rm $sampleID.recal.table
     done
     echo "done"
 fi
@@ -291,8 +312,8 @@ then
 	    --filterExpression "QD < 2.0" \
 	    -o $sampleID.filtered.vcf 2>$sampleID.variantFilter.log
 	# remove files
-	# rm $sample
-	# rm $sampleID.vcf.idx
+	rm $sample
+	rm $sampleID.vcf.idx
     done
     echo "done"
 fi
