@@ -188,8 +188,8 @@ then
 	    --bqsr-recal-file $sampleID.recal.table \
 	    -O $sampleID.recal.bam 2>$sampleID.baseRecalib.log
 	# remove files
-	# rm $sample
-	# rm $sampleID.split.bai
+	rm $sample
+	rm $sampleID.split.bai
     done
     echo -ne "done\n"
 fi
@@ -213,9 +213,9 @@ then
 	    -ERC GVCF \
 	    -O $sampleID.vcf 2>$sampleID.haploCaller.log
 	# remove files
-	# rm $sample
-	# rm $sampleID.recal.bai
-	# rm $sampleID.recal.table
+	rm $sample
+	rm $sampleID.recal.bai
+	rm $sampleID.recal.table
     done
     echo "done"
 fi
@@ -241,8 +241,8 @@ then
 	    --filterExpression "QD < 2.0" \
 	    -O $sampleID.filtered.vcf 2>$sampleID.variantFilter.log
 	# remove files
-	# rm $sample
-	# rm $sampleID.vcf.idx
+	rm $sample
+	rm $sampleID.vcf.idx
     done
     echo "done"
 fi
