@@ -27,7 +27,7 @@ maxProc=8
 genomeDir="$seqDependencies/ggNoOverhang"
 
 # Path to reference genome and Index files.
-flag=false
+flag=true
 if $flag
 then
     currentDate=$(date +"%Y-%m-%d %X")
@@ -70,7 +70,7 @@ then
 fi
 
 # Order BAM file by position
-flag=false
+flag=true
 if $flag
 then
     currentDate=$(date +"%Y-%m-%d %X")
@@ -83,6 +83,11 @@ then
 	    -p \
 	    -t $maxProc \
 	    $sample &>/dev/null
+	if [ $? != 0 ]
+            then
+            echo -ne "error\n  unable to sort bam"
+            exit 1
+        fi
 	# remove file
 	rm $sample
     done
@@ -90,7 +95,7 @@ then
 fi
 
 # Index BAM file
-flag=false
+flag=true
 if $flag
 then
     currentDate=$(date +"%Y-%m-%d %X")
@@ -106,7 +111,7 @@ then
 fi
 
 # Mark duplicates using Picard
-flag=false
+flag=true
 if $flag
 then
     currentDate=$(date +"%Y-%m-%d %X")
@@ -120,6 +125,11 @@ then
 	    M=$sampleID.dup.metrics \
 	    CREATE_INDEX=true \
 	    VALIDATION_STRINGENCY=SILENT 2>$sampleID.markDuplicates.log
+	if [ $? != 0 ]
+            then
+            echo -ne "error\n  unable to mark duplicates"
+            exit 1
+        fi
 	# remove files
 	rm $sample
 	rm $sample.bai
@@ -128,7 +138,7 @@ then
 fi
 
 # SplitNCigarReads
-flag=false
+flag=true
 if $flag
 then
     currentDate=$(date +"%Y-%m-%d %X")
@@ -136,6 +146,7 @@ then
     for sample in $(find $dirData -name "*.dupMarked.bam")
     do
         sampleID=$(echo $sample | sed -r 's/(.?).dupMarked.bam$/\1/')
+	module load gatk/3.8
 	java -d64 -jar $GATK \
 	    -T SplitNCigarReads \
 	    -R $genomeFasta \
@@ -145,10 +156,17 @@ then
 	    -RMQF 255 \
 	    -RMQT 60 \
 	    -U ALLOW_N_CIGAR_READS 2>$sampleID.splitNCigarReads.log
+	if [ $? != 0 ]
+            then
+            echo -ne "error\n  unable to split reads"
+            exit 1
+        fi
 	# remove files
 	rm $sample
 	rm $sampleID.dupMarked.bai
 	rm $sampleID.dup.metrics
+	# reload gatk 4
+	module load gatk/4.0.1.1
     done
     echo -ne "done\n"
 fi
@@ -162,11 +180,11 @@ then
     for sample in $(find $dirData -name "*.split.bam")
     do
 	sampleID=$(echo $sample | sed -r 's/(.?).split.bam$/\1/')
-	java -d64 -jar $GATK \
+	java -d64 -Xmx32G -jar $GATK \
 	    BaseRecalibrator \
 	    -I $sample \
 	    -R $genomeFasta \
-	    -knownSites $seqDependencies/Annotation/variant.vcf \
+	    --known-sites $seqDependencies/Annotation/variant.vcf \
 	    -O $sampleID.recal.table 2>$sampleID.genBaseRecalib.log
     done
     echo -ne "done\n"
@@ -187,6 +205,11 @@ then
 	    -I $sample \
 	    --bqsr-recal-file $sampleID.recal.table \
 	    -O $sampleID.recal.bam 2>$sampleID.baseRecalib.log
+	if [ $? != 0 ]
+	    then
+            echo -ne "error\n  unable to print recalibrated reads"
+	    exit 1
+        fi
 	# remove files
 	rm $sample
 	rm $sampleID.split.bai
@@ -212,6 +235,11 @@ then
 	    --standard-min-confidence-threshold-for-calling 20 \
 	    -ERC GVCF \
 	    -O $sampleID.vcf 2>$sampleID.haploCaller.log
+	if [ $? != 0 ]
+        then
+            echo -ne "error\n  unable to call variants"
+            exit 1
+        fi
 	# remove files
 	rm $sample
 	rm $sampleID.recal.bai
@@ -235,11 +263,16 @@ then
 	    -V $sample \
 	    -window 35 \
 	    -cluster 3 \
-	    --filterName FS \
-	    --filterExpression "FS > 30.0" \
-	    --filterName QD \
-	    --filterExpression "QD < 2.0" \
+	    --filter-name FS \
+	    --filter-expression "FS > 30.0" \
+	    --filter-name QD \
+	    --filter-expression "QD < 2.0" \
 	    -O $sampleID.filtered.vcf 2>$sampleID.variantFilter.log
+	if [ $? != 0 ]
+        then
+            echo -ne "error\n  unable to filter variants"
+            exit 1
+        fi
 	# remove files
 	rm $sample
 	rm $sampleID.vcf.idx

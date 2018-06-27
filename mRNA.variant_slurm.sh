@@ -18,7 +18,7 @@
 #SBATCH --mem=32gb
 
 # time requirements
-#SBATCH --time=96:00:00
+#SBATCH --time=120:00:00
 
 # dependencies
 #SBATCH --depend=afterok:$SLURM_JOB_ID
